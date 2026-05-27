@@ -14,6 +14,7 @@ class Model:
         self.returns = []
         self.weight_history = []
         self.weight = {}
+        self.returns = self.price.pct_change()
 
     def rolling_avg(self, date):
         curr_index = self.price.index.get_loc(date)
@@ -28,7 +29,7 @@ class Model:
         stds = dict()
         if curr_index >= self.lookback:
             for column in self.price.columns:
-                std = self.price[column].rolling(window=self.lookback).std().loc[date]
+                std = self.price[column].rolling(window=self.lookback).std().loc[date] / 100
                 stds[column] = std
             return stds
     def signal(self,date):
@@ -41,3 +42,20 @@ class Model:
             signal = (curr_price - avgs[name])/stds[name]
             signals[name] = signal
         return signals
+    
+    def covariance(self,date,stock1,stock2):
+        curr_index = self.price.index.get_loc(date)
+        avg1 = self.returns[stock1].iloc[curr_index - self.lookback : curr_index].mean() 
+        avg2 = self.returns[stock2].iloc[curr_index - self.lookback : curr_index].mean() 
+        sigma = 0
+        for i in range(self.lookback):
+            ret1 = self.returns[stock1].iloc[curr_index - i] 
+            ret2 = self.returns[stock2].iloc[curr_index - i]
+            sigma += ((ret1 - avg1) * (ret2 - avg2)) / 100
+        covar = sigma / (self.lookback - 1)
+        return covar
+    
+    def correlation(self,date,stock1,stock2):
+        stds = self.rolling_std(date)
+        correlation = self.covariance(date,stock1,stock2) / (stds[stock1] * stds[stock2])
+        return correlation
