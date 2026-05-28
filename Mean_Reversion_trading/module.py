@@ -1,5 +1,9 @@
 import pandas as pd
 import numpy as np
+from sklearn.linear_model import LinearRegression
+from statsmodels.tsa.stattools import adfuller
+
+
 class Model:
     def __init__(self,capital,clopri,lookback):
         self.inicap = capital
@@ -59,3 +63,37 @@ class Model:
         stds = self.rolling_std(date)
         correlation = self.covariance(date,stock1,stock2) / (stds[stock1] * stds[stock2])
         return correlation
+    
+    def hedge_ratio(self,date,stock1,stock2,window=120):
+        curr_index = self.price.index.get_loc(date)
+        if curr_index< window:
+            raise ValueError(
+                f"Not enough history before {date}"
+            )
+        prices1 = self.prices[stock1].iloc[curr_index - window : curr_index]
+        prices2 = self.prices[stock2].iloc[curr_index - window : curr_index]
+
+        if prices1.isnull().any() or prices2.isnull().any():
+            raise ValueError(
+                f"None type detected in the window"
+            )
+        
+        X = prices2.values.reshape(-1,1)
+        Y = prices1.values
+
+        mod = LinearRegression().fit(X,Y)
+        hedge_ratio = mod.coef_[0]
+        intercept = mod.intercept_
+
+        spread = prices1 - hedge_ratio * prices2
+        adf_stat, adf_p = adfuller(spread)[0:2]
+
+        return {
+        "hedge_ratio" : hedge_ratio,
+        "intercept"   : intercept,
+        "spread"      : spread,
+        "adf_stat"    : adf_stat,
+        "adf_pvalue"  : adf_p,
+        "stationary"  : adf_p < 0.05,
+    }
+        
