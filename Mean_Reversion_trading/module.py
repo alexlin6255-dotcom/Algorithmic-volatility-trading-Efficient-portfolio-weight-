@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from sklearn.linear_model import LinearRegression
 from statsmodels.tsa.stattools import adfuller
+from itertools import combinations
 
 
 class Model:
@@ -70,8 +71,8 @@ class Model:
             raise ValueError(
                 f"Not enough history before {date}"
             )
-        prices1 = self.prices[stock1].iloc[curr_index - window : curr_index]
-        prices2 = self.prices[stock2].iloc[curr_index - window : curr_index]
+        prices1 = self.price[stock1].iloc[curr_index - window : curr_index]
+        prices2 = self.price[stock2].iloc[curr_index - window : curr_index]
 
         if prices1.isnull().any() or prices2.isnull().any():
             raise ValueError(
@@ -95,5 +96,27 @@ class Model:
         "adf_stat"    : adf_stat,
         "adf_pvalue"  : adf_p,
         "stationary"  : adf_p < 0.05,
+        "z_score"     : (spread - spread.rolling(self.lookback).mean()) / spread.rolling(self.lookback).std()
     }
+
+    def pick_pair(self,date):
+        tickers = ["MSFT", "AMZN", "AAPL", "GOOG"]
+        result = []
+
+        for stock1, stock2 in combinations(tickers, 2):
+            corr = self.correlation(date,stock1,stock2)
+            if corr > 0.50:
+                hedge = self.hedge_ratio(date,stock1,stock2)
+                if hedge["adf_pvalue"] < 0.05:
+                    if hedge["z_score"].iloc[-1] > 2.0:
+                        result.append({stock1: "short", stock2: "long"})
+                    elif hedge["z_score"].iloc[-1] < -2.0:
+                        result.append({stock1: "long", stock2: "short"})
+                    elif abs(hedge["z_score"].iloc[-1]) < 0.5:
+                        result.append({stock1: "close", stock2: "close"})
+            else:
+                continue
+        return result
+
+
         
